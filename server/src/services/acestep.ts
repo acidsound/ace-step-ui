@@ -135,10 +135,10 @@ async function submitToApi(params: GenerationParams): Promise<{ taskId: string }
     vocal_language: params.vocalLanguage || 'en',
     use_random_seed: params.randomSeed !== false,
     shift: params.shift ?? 3.0,
-    thinking: params.thinking ?? false,
-    use_cot_caption: false,
-    use_cot_language: false,
-    use_cot_metas: false,
+    thinking: params.thinking ?? false, // Respect frontend choice, default false for GPU compatibility
+    use_cot_caption: false, // Explicitly disable CoT features that require LLM
+    use_cot_language: false, // Explicitly disable CoT features that require LLM
+    use_cot_metas: false, // Explicitly disable CoT features that require LLM
   };
 
   if (params.bpm && params.bpm > 0) body.bpm = params.bpm;
@@ -154,7 +154,7 @@ async function submitToApi(params: GenerationParams): Promise<{ taskId: string }
   if (params.repaintingEnd !== undefined && params.repaintingEnd > 0) body.repainting_end = params.repaintingEnd;
   if (params.audioCoverStrength !== undefined && params.audioCoverStrength !== 1.0) body.audio_cover_strength = params.audioCoverStrength;
   if (params.instruction) body.instruction = params.instruction;
-
+  // LLM and CoT parameters only sent when thinking mode is enabled
   if (params.thinking) {
     if (params.lmTemperature !== undefined) body.lm_temperature = params.lmTemperature;
     if (params.lmCfgScale !== undefined) body.lm_cfg_scale = params.lmCfgScale;
