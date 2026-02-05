@@ -117,7 +117,9 @@ export function resetApiCache(): void {
 }
 
 // Submit generation job to ACE-Step API
+// Submit generation job to ACE-Step API
 async function submitToApi(params: GenerationParams): Promise<{ taskId: string }> {
+  // 1. Prepare common parameters
   const caption = params.style || 'pop music';
   const prompt = params.customMode ? caption : (params.songDescription || caption);
   const lyrics = params.instrumental ? '' : (params.lyrics || '');
@@ -133,10 +135,10 @@ async function submitToApi(params: GenerationParams): Promise<{ taskId: string }
     vocal_language: params.vocalLanguage || 'en',
     use_random_seed: params.randomSeed !== false,
     shift: params.shift ?? 3.0,
-    thinking: params.thinking ?? false, // Respect frontend choice, default false for GPU compatibility
-    use_cot_caption: false, // Explicitly disable CoT features that require LLM
-    use_cot_language: false, // Explicitly disable CoT features that require LLM
-    use_cot_metas: false, // Explicitly disable CoT features that require LLM
+    thinking: params.thinking ?? false,
+    use_cot_caption: false,
+    use_cot_language: false,
+    use_cot_metas: false,
   };
 
   if (params.bpm && params.bpm > 0) body.bpm = params.bpm;
@@ -152,7 +154,7 @@ async function submitToApi(params: GenerationParams): Promise<{ taskId: string }
   if (params.repaintingEnd !== undefined && params.repaintingEnd > 0) body.repainting_end = params.repaintingEnd;
   if (params.audioCoverStrength !== undefined && params.audioCoverStrength !== 1.0) body.audio_cover_strength = params.audioCoverStrength;
   if (params.instruction) body.instruction = params.instruction;
-  // LLM and CoT parameters only sent when thinking mode is enabled
+
   if (params.thinking) {
     if (params.lmTemperature !== undefined) body.lm_temperature = params.lmTemperature;
     if (params.lmCfgScale !== undefined) body.lm_cfg_scale = params.lmCfgScale;
@@ -166,40 +168,101 @@ async function submitToApi(params: GenerationParams): Promise<{ taskId: string }
   if (params.cfgIntervalStart !== undefined && params.cfgIntervalStart > 0) body.cfg_interval_start = params.cfgIntervalStart;
   if (params.cfgIntervalEnd !== undefined && params.cfgIntervalEnd < 1.0) body.cfg_interval_end = params.cfgIntervalEnd;
 
-  // Handle reference audio - need to pass file path
+  // 2. Resolve local file paths for reference/source audio
+  let refAudioPath: string | null = null;
+  let srcAudioPath: string | null = null;
+
   if (params.referenceAudioUrl) {
-    let refAudioPath = params.referenceAudioUrl;
+    refAudioPath = params.referenceAudioUrl;
     if (refAudioPath.startsWith('/audio/')) {
       refAudioPath = path.join(AUDIO_DIR, refAudioPath.replace('/audio/', ''));
     }
-    body.reference_audio_path = refAudioPath;
   }
+
   if (params.sourceAudioUrl) {
-    let srcAudioPath = params.sourceAudioUrl;
+    srcAudioPath = params.sourceAudioUrl;
     if (srcAudioPath.startsWith('/audio/')) {
       srcAudioPath = path.join(AUDIO_DIR, srcAudioPath.replace('/audio/', ''));
     }
-    body.src_audio_path = srcAudioPath;
   }
 
-  const response = await fetch(`${ACESTEP_API}/release_task`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  // 3. Determine request method (Multipart vs JSON)
+  const hasFiles = refAudioPath || srcAudioPath;
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`API error: ${response.status} - ${errorText}`);
+  if (hasFiles) {
+    console.log('[ACE-Step] Sending request with FormData (Files included)');
+    const formData = new FormData();
+
+    // Append standard fields
+    for (const [key, value] of Object.entries(body)) {
+      formData.append(key, String(value));
+    }
+
+    // Append files
+    const { readFile } = await import('fs/promises'); // Dynamic import for safety
+
+    if (refAudioPath) {
+      try {
+        const fileBuffer = await readFile(refAudioPath);
+        const blob = new Blob([fileBuffer]);
+        formData.append('ref_audio', blob, path.basename(refAudioPath));
+      } catch (err) {
+        console.warn(`[ACE-Step] Failed to read reference audio: ${refAudioPath}`, err);
+        // Fallback: send path string if file fails
+        formData.append('reference_audio_path', refAudioPath);
+      }
+    }
+
+    if (srcAudioPath) {
+      try {
+        const fileBuffer = await readFile(srcAudioPath);
+        const blob = new Blob([fileBuffer]);
+        formData.append('src_audio', blob, path.basename(srcAudioPath));
+      } catch (err) {
+        console.warn(`[ACE-Step] Failed to read source audio: ${srcAudioPath}`, err);
+        // Fallback: send path string if file fails
+        formData.append('src_audio_path', srcAudioPath);
+      }
+    }
+
+    const response = await fetch(`${ACESTEP_API}/release_task`, {
+      method: 'POST',
+      body: formData, // Content-Type header set automatically with boundary
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API error (Multipart): ${response.status} - ${errorText}`);
+    }
+
+    const result = await response.json();
+    const taskId = result.data?.task_id || result.data?.job_id || result.job_id || result.task_id;
+    if (!taskId) throw new Error('No task ID returned from API (Multipart)');
+    return { taskId };
+
+  } else {
+    // Legacy JSON path (no files to upload)
+    console.log('[ACE-Step] Sending request with JSON');
+
+    // Explicitly set null/empty paths if not present, to match previous behavior if needed?
+    // Actually, explicit nulls often break things, better to just omit or send if we had them (which we don't here).
+
+    const response = await fetch(`${ACESTEP_API}/release_task`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API error (JSON): ${response.status} - ${errorText}`);
+    }
+
+    const result = await response.json();
+    const taskId = result.data?.task_id || result.data?.job_id || result.job_id || result.task_id;
+    if (!taskId) throw new Error('No task ID returned from API (JSON)');
+    return { taskId };
   }
-
-  const result = await response.json();
-  const taskId = result.data?.task_id || result.data?.job_id || result.job_id || result.task_id;
-  if (!taskId) {
-    throw new Error('No task ID returned from API');
-  }
-
-  return { taskId };
 }
 
 // Poll API for job result
