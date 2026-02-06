@@ -108,6 +108,7 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
       `SELECT s.id, s.title, s.lyrics, s.style, s.caption, s.cover_url, s.audio_url,
               s.duration, s.bpm, s.key_scale, s.time_signature, s.tags, s.is_public, 
               s.like_count, s.view_count, s.user_id, s.created_at,
+              s.lrc, s.lm_score, s.dit_score, s.sentence_timestamps, s.token_timestamps,
               COALESCE(u.username, 'Anonymous') as creator
        FROM songs s
        LEFT JOIN users u ON s.user_id = u.id
@@ -115,6 +116,17 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
        ORDER BY s.created_at DESC`,
       [req.user!.id]
     );
+
+    console.log(`[Songs] Retrieved ${result.rows.length} songs for ${req.user!.id}`);
+
+    if (result.rows.length > 0) {
+      const first = result.rows[0];
+      console.log(`[Songs] Row 0 Keys:`, Object.keys(first));
+      console.log(`[Songs] Row 0 sentence_timestamps present:`, !!first.sentence_timestamps);
+      if (first.sentence_timestamps) {
+        console.log(`[Songs] Row 0 sentence_timestamps length:`, String(first.sentence_timestamps).length);
+      }
+    }
 
     const songs = await Promise.all(
       result.rows.map(async (row) => ({
@@ -137,6 +149,7 @@ router.get('/public/featured', optionalAuthMiddleware, async (_req: Authenticate
     const result = await pool.query(
       `SELECT s.id, s.title, s.lyrics, s.style, s.caption, s.cover_url, s.audio_url,
               s.duration, s.bpm, s.key_scale, s.time_signature, s.tags, s.like_count, s.view_count, s.created_at, s.user_id,
+              s.lrc, s.lm_score, s.dit_score, s.sentence_timestamps, s.token_timestamps,
               COALESCE(u.username, 'Anonymous') as creator, u.avatar_url as creator_avatar
        FROM songs s
        LEFT JOIN users u ON s.user_id = u.id
@@ -184,6 +197,7 @@ router.get('/public', optionalAuthMiddleware, async (req: AuthenticatedRequest, 
     const result = await pool.query(
       `SELECT s.id, s.title, s.lyrics, s.style, s.caption, s.cover_url, s.audio_url,
               s.duration, s.bpm, s.key_scale, s.time_signature, s.tags, s.like_count, s.created_at,
+              s.lrc, s.lm_score, s.dit_score, s.sentence_timestamps, s.token_timestamps,
               COALESCE(u.username, 'Anonymous') as creator
        FROM songs s
        LEFT JOIN users u ON s.user_id = u.id
@@ -213,6 +227,7 @@ router.get('/:id', optionalAuthMiddleware, async (req: AuthenticatedRequest, res
     const result = await pool.query(
       `SELECT s.id, s.user_id, s.title, s.lyrics, s.style, s.caption, s.cover_url, s.audio_url,
               s.duration, s.bpm, s.key_scale, s.time_signature, s.tags, s.is_public, s.like_count, s.view_count, s.created_at,
+              s.lrc, s.lm_score, s.dit_score, s.sentence_timestamps, s.token_timestamps,
               COALESCE(u.username, 'Anonymous') as creator, u.avatar_url as creator_avatar
        FROM songs s
        LEFT JOIN users u ON s.user_id = u.id
@@ -253,6 +268,7 @@ router.get('/:id/full', optionalAuthMiddleware, async (req: AuthenticatedRequest
         `SELECT s.id, s.user_id, s.title, s.lyrics, s.style, s.caption, s.cover_url, s.audio_url,
                 s.duration, s.bpm, s.key_scale, s.time_signature, s.tags, s.is_public,
                 s.like_count, s.view_count, s.created_at,
+                s.lrc, s.lm_score, s.dit_score, s.sentence_timestamps, s.token_timestamps,
                 COALESCE(u.username, 'Anonymous') as creator, u.avatar_url as creator_avatar
          FROM songs s
          LEFT JOIN users u ON s.user_id = u.id

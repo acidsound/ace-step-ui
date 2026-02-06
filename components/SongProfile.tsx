@@ -123,6 +123,12 @@ export const SongProfile: React.FC<SongProfileProps> = ({ songId, onBack, onPlay
                 userId: response.song.user_id,
                 creator: response.song.creator,
                 creator_avatar: response.song.creator_avatar,
+                token_timestamps: typeof response.song.token_timestamps === 'string'
+                    ? JSON.parse(response.song.token_timestamps)
+                    : response.song.token_timestamps,
+                lrc: response.song.lrc,
+                lm_score: response.song.lm_score,
+                dit_score: response.song.dit_score,
             };
 
             setSong(transformedSong);
@@ -154,6 +160,7 @@ export const SongProfile: React.FC<SongProfileProps> = ({ songId, onBack, onPlay
             </div>
         );
     }
+
 
     return (
         <div className="w-full h-full flex flex-col bg-zinc-50 dark:bg-black overflow-hidden">
@@ -285,7 +292,6 @@ export const SongProfile: React.FC<SongProfileProps> = ({ songId, onBack, onPlay
                                 <MoreHorizontal size={16} className="text-zinc-700 dark:text-white" />
                             </button>
                         </div>
-
                         {/* Lyrics */}
                         {song.lyrics && (
                             <div className="bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4">
@@ -293,6 +299,54 @@ export const SongProfile: React.FC<SongProfileProps> = ({ songId, onBack, onPlay
                                 <div className="text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-line leading-relaxed max-h-72 md:max-h-96 overflow-y-auto">
                                     {song.lyrics}
                                 </div>
+                            </div>
+                        )}
+                        {/* LRC & Scores */}
+                        {(song.lrc || song.lm_score != null || song.dit_score != null) && (
+                            <div id="lrc_scores" className="space-y-4">
+                                {/* Scores */}
+                                {(song.lm_score != null || song.dit_score != null) && (
+                                    <div className="flex gap-4">
+                                        {song.lm_score != null && (
+                                            <div className="flex-1 bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4">
+                                                <div className="text-xs text-zinc-500 mb-1">LM Score</div>
+                                                <div className="text-xl font-bold text-zinc-900 dark:text-white">
+                                                    {(song.lm_score * 100).toFixed(1)}%
+                                                </div>
+                                                <div className="mt-2 w-full bg-zinc-200 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden">
+                                                    <div
+                                                        className="h-full bg-indigo-500"
+                                                        style={{ width: `${song.lm_score * 100}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+                                        {song.dit_score != null && (
+                                            <div className="flex-1 bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4">
+                                                <div className="text-xs text-zinc-500 mb-1">DiT Score</div>
+                                                <div className="text-xl font-bold text-zinc-900 dark:text-white">
+                                                    {(song.dit_score * 100).toFixed(1)}%
+                                                </div>
+                                                <div className="mt-2 w-full bg-zinc-200 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden">
+                                                    <div
+                                                        className="h-full bg-purple-500"
+                                                        style={{ width: `${song.dit_score * 100}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* LRC */}
+                                {song.lrc && song.lrc.length > 0 && (
+                                    <div className="bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4">
+                                        <h3 className="text-sm font-semibold text-zinc-900 dark:text-white mb-3 text-center">Sync Lyrics (LRC)</h3>
+                                        <div className="text-xs font-mono text-zinc-500 dark:text-zinc-400 whitespace-pre-line leading-relaxed max-h-48 overflow-y-auto">
+                                            {song.lrc}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

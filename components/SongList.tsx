@@ -88,7 +88,7 @@ export const SongList: React.FC<SongListProps> = ({
             const matchesSearch =
                 song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 song.style.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                song.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+                (Array.isArray(song.tags) && song.tags.some(tag => tag && tag.toLowerCase().includes(searchQuery.toLowerCase())));
 
             if (!matchesSearch) return false;
 
@@ -262,195 +262,195 @@ const SongItem: React.FC<SongItemProps> = ({
 
     return (
         <>
-        <div
-            onClick={onSelect}
-            className={`group flex items-center gap-4 p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-[#18181b] transition-all cursor-pointer border ${isSelected ? 'bg-zinc-100 dark:bg-[#18181b] border-zinc-200 dark:border-white/10' : 'border-transparent bg-transparent'}`}
-        >
+            <div
+                onClick={onSelect}
+                className={`group flex items-center gap-4 p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-[#18181b] transition-all cursor-pointer border ${isSelected ? 'bg-zinc-100 dark:bg-[#18181b] border-zinc-200 dark:border-white/10' : 'border-transparent bg-transparent'}`}
+            >
 
-            {/* Cover Art - Reduced size */}
-            <div className="relative w-16 h-16 flex-shrink-0 rounded-md bg-zinc-200 dark:bg-zinc-800 overflow-hidden shadow-sm group/image">
-                {/* Use gradient fallback if no coverUrl or image fails to load */}
-                {(!song.coverUrl || imageError) ? (
-                    <AlbumCover seed={song.id || song.title} size="full" className={`w-full h-full ${song.isGenerating ? 'opacity-20 blur-sm' : 'opacity-100'}`} />
-                ) : (
-                    <img
-                        src={song.coverUrl}
-                        alt={song.title}
-                        className={`w-full h-full object-cover transition-opacity ${song.isGenerating ? 'opacity-20 blur-sm' : 'opacity-100'}`}
-                        onError={() => setImageError(true)}
-                    />
-                )}
+                {/* Cover Art - Reduced size */}
+                <div className="relative w-16 h-16 flex-shrink-0 rounded-md bg-zinc-200 dark:bg-zinc-800 overflow-hidden shadow-sm group/image">
+                    {/* Use gradient fallback if no coverUrl or image fails to load */}
+                    {(!song.coverUrl || imageError) ? (
+                        <AlbumCover seed={song.id || song.title} size="full" className={`w-full h-full ${song.isGenerating ? 'opacity-20 blur-sm' : 'opacity-100'}`} />
+                    ) : (
+                        <img
+                            src={song.coverUrl}
+                            alt={song.title}
+                            className={`w-full h-full object-cover transition-opacity ${song.isGenerating ? 'opacity-20 blur-sm' : 'opacity-100'}`}
+                            onError={() => setImageError(true)}
+                        />
+                    )}
 
-                {song.isGenerating ? (
-                    <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center gap-1">
-                        {song.queuePosition ? (
-                            /* Queue indicator */
-                            <>
-                                <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center">
-                                    <Clock size={16} className="text-amber-400" />
-                                </div>
-                                <span className="text-[10px] font-medium text-amber-400">Queue #{song.queuePosition}</span>
-                            </>
-                        ) : (
-                            /* Generating - Music Waveform Animation */
-                            <div className="flex items-end gap-1 h-6">
-                                <div className="w-1 bg-pink-500 rounded-full music-bar-anim" style={{ animationDelay: '0.0s' }}></div>
-                                <div className="w-1 bg-pink-500 rounded-full music-bar-anim" style={{ animationDelay: '0.2s' }}></div>
-                                <div className="w-1 bg-pink-500 rounded-full music-bar-anim" style={{ animationDelay: '0.4s' }}></div>
-                                <div className="w-1 bg-pink-500 rounded-full music-bar-anim" style={{ animationDelay: '0.1s' }}></div>
-                            </div>
-                        )}
-                    </div>
-                ) : (
-                    <div
-                        className={`absolute inset-0 bg-black/40 flex items-center justify-center backdrop-blur-[1px] cursor-pointer transition-opacity duration-200 ${isCurrent ? 'opacity-100' : 'opacity-0 group-hover/image:opacity-100'}`}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onPlay();
-                        }}
-                    >
-                        <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-lg transform transition-transform hover:scale-105">
-                            {isCurrent && isPlaying ? (
-                                <Pause fill="black" className="text-black w-5 h-5" />
+                    {song.isGenerating ? (
+                        <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center gap-1">
+                            {song.queuePosition ? (
+                                /* Queue indicator */
+                                <>
+                                    <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center">
+                                        <Clock size={16} className="text-amber-400" />
+                                    </div>
+                                    <span className="text-[10px] font-medium text-amber-400">Queue #{song.queuePosition}</span>
+                                </>
                             ) : (
-                                <Play fill="black" className="text-black ml-1 w-5 h-5" />
+                                /* Generating - Music Waveform Animation */
+                                <div className="flex items-end gap-1 h-6">
+                                    <div className="w-1 bg-pink-500 rounded-full music-bar-anim" style={{ animationDelay: '0.0s' }}></div>
+                                    <div className="w-1 bg-pink-500 rounded-full music-bar-anim" style={{ animationDelay: '0.2s' }}></div>
+                                    <div className="w-1 bg-pink-500 rounded-full music-bar-anim" style={{ animationDelay: '0.4s' }}></div>
+                                    <div className="w-1 bg-pink-500 rounded-full music-bar-anim" style={{ animationDelay: '0.1s' }}></div>
+                                </div>
                             )}
                         </div>
-                    </div>
-                )}
-            </div>
-
-            {/* Content */}
-            <div className="flex-1 min-w-0 flex flex-col justify-between py-1">
-                <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                        <h3 className={`font-bold text-lg truncate ${isCurrent ? 'text-pink-600 dark:text-pink-500' : 'text-zinc-900 dark:text-white'}`}>
-                            {song.title || (song.isGenerating ? (song.queuePosition ? "Queued..." : "Creating...") : "Untitled")}
-                        </h3>
-                        <span className="inline-flex items-center justify-center text-[9px] font-bold text-white bg-gradient-to-r from-pink-500 to-purple-500 px-1.5 py-0.5 rounded-sm shadow-sm">
-                            v1.5
-                        </span>
-                        {song.isPublic === false && (
-                            <Lock size={12} className="text-zinc-400 dark:text-zinc-500" />
-                        )}
-                    </div>
-                    <div className="flex items-center gap-2">
+                    ) : (
                         <div
-                            className="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
+                            className={`absolute inset-0 bg-black/40 flex items-center justify-center backdrop-blur-[1px] cursor-pointer transition-opacity duration-200 ${isCurrent ? 'opacity-100' : 'opacity-0 group-hover/image:opacity-100'}`}
                             onClick={(e) => {
                                 e.stopPropagation();
-                                if (song.creator && onNavigateToProfile) {
-                                    onNavigateToProfile(song.creator);
-                                }
+                                onPlay();
                             }}
                         >
-                            <div className="w-4 h-4 rounded-full bg-purple-500 text-[8px] flex items-center justify-center font-bold text-white">
-                                {(song.creator?.[0] || 'U').toUpperCase()}
+                            <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-lg transform transition-transform hover:scale-105">
+                                {isCurrent && isPlaying ? (
+                                    <Pause fill="black" className="text-black w-5 h-5" />
+                                ) : (
+                                    <Play fill="black" className="text-black ml-1 w-5 h-5" />
+                                )}
                             </div>
-                            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors hover:underline">
-                                {song.creator || 'Unknown'}
-                            </span>
                         </div>
-                    </div>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-500 line-clamp-2 pt-1 font-medium max-w-2xl">
-                        {song.style}
-                    </p>
+                    )}
                 </div>
 
-                {/* Actions Row - Hidden while generating */}
-                {!song.isGenerating && (
-                    <div className="flex items-center gap-1 pt-2">
-                        <button
-                            className={`flex items-center gap-1 px-3 py-1.5 rounded-full hover:bg-white/5 transition-colors ${isLiked ? 'text-pink-600 dark:text-pink-500 bg-pink-100 dark:bg-pink-500/10' : 'text-zinc-400 hover:text-black dark:hover:text-white'}`}
-                            onClick={(e) => { e.stopPropagation(); onToggleLike(); }}
-                        >
-                            <ThumbsUp size={16} fill={isLiked ? "currentColor" : "none"} />
-                            {(song.likeCount || 0) > 0 && (
-                                <span className="text-xs font-bold">{song.likeCount}</span>
+                {/* Content */}
+                <div className="flex-1 min-w-0 flex flex-col justify-between py-1">
+                    <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                            <h3 className={`font-bold text-lg truncate ${isCurrent ? 'text-pink-600 dark:text-pink-500' : 'text-zinc-900 dark:text-white'}`}>
+                                {song.title || (song.isGenerating ? (song.queuePosition ? "Queued..." : "Creating...") : "Untitled")}
+                            </h3>
+                            <span className="inline-flex items-center justify-center text-[9px] font-bold text-white bg-gradient-to-r from-pink-500 to-purple-500 px-1.5 py-0.5 rounded-sm shadow-sm">
+                                v1.5
+                            </span>
+                            {song.isPublic === false && (
+                                <Lock size={12} className="text-zinc-400 dark:text-zinc-500" />
                             )}
-                        </button>
-
-                        <button
-                            className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-white/5 text-zinc-400 hover:text-black dark:hover:text-white transition-colors"
-                            onClick={(e) => { e.stopPropagation(); }}
-                        >
-                            <ThumbsDown size={16} />
-                        </button>
-
-                        <button
-                            className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-white/5 text-zinc-400 hover:text-black dark:hover:text-white transition-colors"
-                            onClick={(e) => { e.stopPropagation(); setShareModalOpen(true); }}
-                            title="Share"
-                        >
-                            <Share2 size={16} />
-                        </button>
-
-                        <button
-                            className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-white/5 text-zinc-400 hover:text-black dark:hover:text-white transition-colors"
-                            onClick={(e) => { e.stopPropagation(); if (onOpenVideo) onOpenVideo(); }}
-                            title="Create Video"
-                        >
-                            <Video size={16} />
-                        </button>
-
-                        <button
-                            className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-white/5 text-zinc-400 hover:text-black dark:hover:text-white transition-colors ml-auto"
-                            onClick={(e) => { e.stopPropagation(); onAddToPlaylist(); }}
-                            title="Add to Playlist"
-                        >
-                            <ListPlus size={16} />
-                        </button>
-
-                        {/* Info Button - Visible only on small/medium screens where sidebar is hidden */}
-                        <button
-                            className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-white/5 text-zinc-400 hover:text-black dark:hover:text-white transition-colors xl:hidden"
-                            onClick={(e) => { e.stopPropagation(); if (onShowDetails) onShowDetails(); }}
-                            title="Song Details"
-                        >
-                            <Info size={16} />
-                        </button>
-
-                        <div className="relative">
-                            <button
-                                className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-white/5 text-zinc-400 hover:text-black dark:hover:text-white transition-colors"
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div
+                                className="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    setShowDropdown(!showDropdown);
+                                    if (song.creator && onNavigateToProfile) {
+                                        onNavigateToProfile(song.creator);
+                                    }
                                 }}
                             >
-                                <MoreHorizontal size={16} />
-                            </button>
-                            <SongDropdownMenu
-                                song={song}
-                                isOpen={showDropdown}
-                                onClose={() => setShowDropdown(false)}
-                                isOwner={isOwner}
-                                onCreateVideo={() => onOpenVideo?.(song)}
-                                onReusePrompt={() => onReusePrompt?.(song)}
-                                onAddToPlaylist={() => onAddToPlaylist?.(song)}
-                                onDelete={() => onDelete?.(song)}
-                                onShare={() => setShareModalOpen(true)}
-                            />
+                                <div className="w-4 h-4 rounded-full bg-purple-500 text-[8px] flex items-center justify-center font-bold text-white">
+                                    {(song.creator?.[0] || 'U').toUpperCase()}
+                                </div>
+                                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors hover:underline">
+                                    {song.creator || 'Unknown'}
+                                </span>
+                            </div>
                         </div>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-500 line-clamp-2 pt-1 font-medium max-w-2xl">
+                            {song.style}
+                        </p>
                     </div>
-                )}
+
+                    {/* Actions Row - Hidden while generating */}
+                    {!song.isGenerating && (
+                        <div className="flex items-center gap-1 pt-2">
+                            <button
+                                className={`flex items-center gap-1 px-3 py-1.5 rounded-full hover:bg-white/5 transition-colors ${isLiked ? 'text-pink-600 dark:text-pink-500 bg-pink-100 dark:bg-pink-500/10' : 'text-zinc-400 hover:text-black dark:hover:text-white'}`}
+                                onClick={(e) => { e.stopPropagation(); onToggleLike(); }}
+                            >
+                                <ThumbsUp size={16} fill={isLiked ? "currentColor" : "none"} />
+                                {(song.likeCount || 0) > 0 && (
+                                    <span className="text-xs font-bold">{song.likeCount}</span>
+                                )}
+                            </button>
+
+                            <button
+                                className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-white/5 text-zinc-400 hover:text-black dark:hover:text-white transition-colors"
+                                onClick={(e) => { e.stopPropagation(); }}
+                            >
+                                <ThumbsDown size={16} />
+                            </button>
+
+                            <button
+                                className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-white/5 text-zinc-400 hover:text-black dark:hover:text-white transition-colors"
+                                onClick={(e) => { e.stopPropagation(); setShareModalOpen(true); }}
+                                title="Share"
+                            >
+                                <Share2 size={16} />
+                            </button>
+
+                            <button
+                                className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-white/5 text-zinc-400 hover:text-black dark:hover:text-white transition-colors"
+                                onClick={(e) => { e.stopPropagation(); if (onOpenVideo) onOpenVideo(); }}
+                                title="Create Video"
+                            >
+                                <Video size={16} />
+                            </button>
+
+                            <button
+                                className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-white/5 text-zinc-400 hover:text-black dark:hover:text-white transition-colors ml-auto"
+                                onClick={(e) => { e.stopPropagation(); onAddToPlaylist(); }}
+                                title="Add to Playlist"
+                            >
+                                <ListPlus size={16} />
+                            </button>
+
+                            {/* Info Button - Visible only on small/medium screens where sidebar is hidden */}
+                            <button
+                                className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-white/5 text-zinc-400 hover:text-black dark:hover:text-white transition-colors xl:hidden"
+                                onClick={(e) => { e.stopPropagation(); if (onShowDetails) onShowDetails(); }}
+                                title="Song Details"
+                            >
+                                <Info size={16} />
+                            </button>
+
+                            <div className="relative">
+                                <button
+                                    className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-white/5 text-zinc-400 hover:text-black dark:hover:text-white transition-colors"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowDropdown(!showDropdown);
+                                    }}
+                                >
+                                    <MoreHorizontal size={16} />
+                                </button>
+                                <SongDropdownMenu
+                                    song={song}
+                                    isOpen={showDropdown}
+                                    onClose={() => setShowDropdown(false)}
+                                    isOwner={isOwner}
+                                    onCreateVideo={() => onOpenVideo?.(song)}
+                                    onReusePrompt={() => onReusePrompt?.(song)}
+                                    onAddToPlaylist={() => onAddToPlaylist?.(song)}
+                                    onDelete={() => onDelete?.(song)}
+                                    onShare={() => setShareModalOpen(true)}
+                                />
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Timestamp */}
+                <div className="text-xs font-mono text-zinc-500 dark:text-zinc-600 self-start pt-1">
+                    {song.isGenerating ? (
+                        <span className={song.queuePosition ? 'text-amber-500' : 'text-pink-500'}>
+                            {song.queuePosition ? `#${song.queuePosition}` : 'Creating...'}
+                        </span>
+                    ) : song.duration}
+                </div>
             </div>
 
-            {/* Timestamp */}
-            <div className="text-xs font-mono text-zinc-500 dark:text-zinc-600 self-start pt-1">
-                {song.isGenerating ? (
-                    <span className={song.queuePosition ? 'text-amber-500' : 'text-pink-500'}>
-                        {song.queuePosition ? `#${song.queuePosition}` : 'Creating...'}
-                    </span>
-                ) : song.duration}
-            </div>
-        </div>
-
-        <ShareModal
-            isOpen={shareModalOpen}
-            onClose={() => setShareModalOpen(false)}
-            song={song}
-        />
+            <ShareModal
+                isOpen={shareModalOpen}
+                onClose={() => setShareModalOpen(false)}
+                song={song}
+            />
         </>
     );
 };

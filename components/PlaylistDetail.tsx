@@ -43,7 +43,13 @@ export const PlaylistDetail: React.FC<PlaylistDetailProps> = ({ playlistId, onBa
                 viewCount: s.view_count || 0,
                 creator: s.creator,
                 created_at: s.created_at,
-                addedAt: s.added_at
+                addedAt: s.added_at,
+                is_public: s.is_public || false,
+                sentence_timestamps: typeof s.sentence_timestamps === 'string' ? JSON.parse(s.sentence_timestamps) : s.sentence_timestamps,
+                token_timestamps: typeof s.token_timestamps === 'string' ? JSON.parse(s.token_timestamps) : s.token_timestamps,
+                lrc: s.lrc,
+                lm_score: s.lm_score,
+                dit_score: s.dit_score,
             }));
 
             setSongs(mappedSongs);

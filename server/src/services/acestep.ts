@@ -1,5 +1,5 @@
 import { writeFile, mkdir, copyFile, rm, stat, access } from 'fs/promises';
-import { spawn, execSync } from 'child_process';
+import { execSync } from 'child_process';
 import { existsSync, createWriteStream } from 'fs';
 import path from 'path';
 import { pipeline } from 'stream/promises';
@@ -27,42 +27,22 @@ const AUDIO_DIR = path.join(__dirname, '../../public/audio');
 
 const ACESTEP_API = config.acestep.apiUrl;
 
+
+const ACESTEP_DIR = resolveAceStepPath();
+
 // Resolve ACE-Step path (from env or default relative path)
+// Kept for ACESTEP_DIR reference if needed for other things (e.g. static files?)
+// But we should probably remove it if we want full decouple.
+// However `getAudioDuration` uses ffprobe on local files, which is fine.
+// Let's remove Python specific paths.
+
 function resolveAceStepPath(): string {
   const envPath = process.env.ACESTEP_PATH;
   if (envPath) {
     return path.isAbsolute(envPath) ? envPath : path.resolve(process.cwd(), envPath);
   }
-  // Default: sibling directory
   return path.resolve(__dirname, '../../../../ACE-Step-1.5');
 }
-
-// Resolve Python path cross-platform (supports venv and portable installations)
-export function resolvePythonPath(baseDir: string): string {
-  // Allow explicit override via env var
-  if (process.env.PYTHON_PATH) {
-    return process.env.PYTHON_PATH;
-  }
-
-  const isWindows = process.platform === 'win32';
-  const pythonExe = isWindows ? 'python.exe' : 'python';
-
-  // Check for portable installation first (python_embeded)
-  const portablePath = path.join(baseDir, 'python_embeded', pythonExe);
-  if (existsSync(portablePath)) {
-    return portablePath;
-  }
-
-  // Standard venv path (different structure on Windows vs Unix)
-  if (isWindows) {
-    return path.join(baseDir, '.venv', 'Scripts', pythonExe);
-  }
-  return path.join(baseDir, '.venv', 'bin', 'python');
-}
-
-const ACESTEP_DIR = resolveAceStepPath();
-const SCRIPTS_DIR = path.join(__dirname, '../../scripts');
-const PYTHON_SCRIPT = path.join(SCRIPTS_DIR, 'simple_generate.py');
 
 // Cache API availability status (check once, remember for session)
 let apiAvailableCache: boolean | null = null;
@@ -116,7 +96,6 @@ export function resetApiCache(): void {
   apiCheckPromise = null;
 }
 
-// Submit generation job to ACE-Step API
 // Submit generation job to ACE-Step API
 async function submitToApi(params: GenerationParams): Promise<{ taskId: string }> {
   // 1. Prepare common parameters
@@ -266,9 +245,19 @@ async function submitToApi(params: GenerationParams): Promise<{ taskId: string }
 }
 
 // Poll API for job result
+interface ApiAudioDetail {
+  file: string;
+  lrc?: string;
+  sentence_timestamps?: any[];
+  token_timestamps?: any[];
+  lm_score?: number;
+  dit_score?: number;
+}
+
 interface ApiTaskResult {
   status: number; // 0 = processing, 1 = done, 2 = failed
   audioPaths: string[];
+  audioDetails?: ApiAudioDetail[];
   metas?: {
     bpm?: number;
     duration?: number;
@@ -316,7 +305,10 @@ async function pollApiResult(taskId: string, maxWaitMs = 600000): Promise<ApiTas
         : [];
       const metas = resultData[0]?.metas;
 
-      return { status: 1, audioPaths, metas };
+      // Extract new details if present (resultData is the list of audio results)
+      const audioDetails = Array.isArray(resultData) ? resultData : [];
+
+      return { status: 1, audioPaths, metas, audioDetails };
     } else if (taskData.status === 2) {
       throw new Error('Generation failed on API side');
     }
@@ -438,6 +430,11 @@ interface GenerationResult {
   bpm?: number;
   keyScale?: string;
   timeSignature?: string;
+  lrc?: string;
+  lm_score?: number;
+  dit_score?: number;
+  sentence_timestamps?: any[];
+  token_timestamps?: any[];
   status: string;
 }
 
@@ -467,20 +464,14 @@ const activeJobs = new Map<string, ActiveJob>();
 const jobQueue: string[] = [];
 let isProcessingQueue = false;
 
-// Health check - verify Python script exists
+// Health check - verify API connectivity
 export async function checkSpaceHealth(): Promise<boolean> {
-  try {
-    const { access } = await import('fs/promises');
-    await access(PYTHON_SCRIPT);
-    return true;
-  } catch {
-    return false;
-  }
+  return await isApiAvailable();
 }
 
 // Discover endpoints (for compatibility)
 export async function discoverEndpoints(): Promise<unknown> {
-  return { provider: 'acestep-local', endpoint: ACESTEP_API };
+  return { provider: 'acestep-remote', endpoint: ACESTEP_API };
 }
 
 // Reset client (no-op for REST API)
@@ -597,6 +588,16 @@ async function processGeneration(
         ? actualDuration
         : (apiResult.metas?.duration || params.duration || 60);
 
+      const firstAudioDetail = apiResult.audioDetails?.[0];
+
+      console.log(`[ACE-Step] Audio Detail for Job ${jobId}:`, {
+        hasLrc: !!firstAudioDetail?.lrc,
+        lrcLength: firstAudioDetail?.lrc?.length,
+        items: Object.keys(firstAudioDetail || {}),
+        sentence_timestamps: firstAudioDetail?.sentence_timestamps,
+        raw: firstAudioDetail
+      });
+
       job.status = 'succeeded';
       job.result = {
         audioUrls,
@@ -604,6 +605,11 @@ async function processGeneration(
         bpm: apiResult.metas?.bpm || params.bpm,
         keyScale: apiResult.metas?.keyscale || params.keyScale,
         timeSignature: apiResult.metas?.timesignature || params.timeSignature,
+        lrc: firstAudioDetail?.lrc,
+        lm_score: firstAudioDetail?.lm_score,
+        dit_score: firstAudioDetail?.dit_score,
+        sentence_timestamps: firstAudioDetail?.sentence_timestamps,
+        token_timestamps: firstAudioDetail?.token_timestamps,
         status: 'succeeded',
       };
       console.log(`Job ${jobId}: Completed via API with ${audioUrls.length} audio files`);
@@ -613,200 +619,69 @@ async function processGeneration(
       job.status = 'failed';
       job.error = error instanceof Error ? error.message : 'API generation failed';
     }
-    return;
+  } else {
+    // API not available and we removed local fallback
+    console.error(`Job ${jobId}: ACE-Step API not available`);
+    job.status = 'failed';
+    job.error = 'ACE-Step API not available';
+  }
+}
+
+export async function formatInputViaApi(params: {
+  caption: string;
+  lyrics: string;
+  bpm?: number;
+  duration?: number;
+  keyScale?: string;
+  timeSignature?: string;
+  temperature?: number;
+}): Promise<any> {
+  // Check API availability first
+  const useApi = await isApiAvailable();
+
+  if (!useApi) {
+    throw new Error('ACE-Step API is not available for formatting');
   }
 
-  // Fall back to Python spawn if API not available
-  console.log(`Job ${jobId}: Using Python spawn (API not available)`, {
-    prompt: prompt.slice(0, 50),
-    lyricsPreview: lyrics.slice(0, 50),
-    duration: params.duration,
-    batchSize: params.batchSize,
-  });
+  const payload = {
+    prompt: params.caption,
+    lyrics: params.lyrics,
+    temperature: params.temperature,
+    param_obj: JSON.stringify({
+      bpm: params.bpm,
+      duration: params.duration,
+      key_scale: params.keyScale,
+      time_signature: params.timeSignature
+    })
+  };
 
   try {
-    const jobOutputDir = path.join(ACESTEP_DIR, 'output', jobId);
-    await mkdir(jobOutputDir, { recursive: true });
+    const response = await fetch(`${ACESTEP_API}/format_input`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
 
-    const args = [
-      '--prompt', prompt,
-      '--duration', String(params.duration ?? 60),
-      '--batch-size', String(params.batchSize ?? 1),
-      '--infer-steps', String(params.inferenceSteps ?? 8),
-      '--guidance-scale', String(params.guidanceScale ?? 10.0),
-      '--audio-format', params.audioFormat ?? 'mp3',
-      '--output-dir', jobOutputDir,
-      '--json',
-    ];
-
-    if (lyrics) args.push('--lyrics', lyrics);
-    if (params.instrumental) args.push('--instrumental');
-    if (params.bpm && params.bpm > 0) args.push('--bpm', String(params.bpm));
-    if (params.keyScale) args.push('--key-scale', params.keyScale);
-    if (params.timeSignature) args.push('--time-signature', params.timeSignature);
-    if (params.vocalLanguage) args.push('--vocal-language', params.vocalLanguage);
-    if (params.seed !== undefined && params.seed >= 0 && !params.randomSeed) args.push('--seed', String(params.seed));
-    if (params.shift !== undefined) args.push('--shift', String(params.shift));
-    if (params.taskType && params.taskType !== 'text2music') args.push('--task-type', params.taskType);
-
-    if (params.referenceAudioUrl) {
-      let refAudioPath = params.referenceAudioUrl;
-      if (refAudioPath.startsWith('/audio/')) {
-        refAudioPath = path.join(AUDIO_DIR, refAudioPath.replace('/audio/', ''));
-      }
-      args.push('--reference-audio', refAudioPath);
-    }
-    if (params.sourceAudioUrl) {
-      let srcAudioPath = params.sourceAudioUrl;
-      if (srcAudioPath.startsWith('/audio/')) {
-        srcAudioPath = path.join(AUDIO_DIR, srcAudioPath.replace('/audio/', ''));
-      }
-      args.push('--src-audio', srcAudioPath);
-    }
-    if (params.audioCodes) args.push('--audio-codes', params.audioCodes);
-    if (params.repaintingStart !== undefined && params.repaintingStart > 0) args.push('--repainting-start', String(params.repaintingStart));
-    if (params.repaintingEnd !== undefined && params.repaintingEnd > 0) args.push('--repainting-end', String(params.repaintingEnd));
-    if (params.audioCoverStrength !== undefined && params.audioCoverStrength !== 1.0) args.push('--audio-cover-strength', String(params.audioCoverStrength));
-    if (params.instruction) args.push('--instruction', params.instruction);
-    if (params.thinking) args.push('--thinking');
-    if (params.lmTemperature !== undefined) args.push('--lm-temperature', String(params.lmTemperature));
-    if (params.lmCfgScale !== undefined) args.push('--lm-cfg-scale', String(params.lmCfgScale));
-    if (params.lmTopK !== undefined && params.lmTopK > 0) args.push('--lm-top-k', String(params.lmTopK));
-    if (params.lmTopP !== undefined) args.push('--lm-top-p', String(params.lmTopP));
-    if (params.lmNegativePrompt) args.push('--lm-negative-prompt', params.lmNegativePrompt);
-    if (params.useCotMetas === false) args.push('--no-cot-metas');
-    if (params.useCotCaption === false) args.push('--no-cot-caption');
-    if (params.useCotLanguage === false) args.push('--no-cot-language');
-    if (params.useAdg) args.push('--use-adg');
-    if (params.cfgIntervalStart !== undefined && params.cfgIntervalStart > 0) args.push('--cfg-interval-start', String(params.cfgIntervalStart));
-    if (params.cfgIntervalEnd !== undefined && params.cfgIntervalEnd < 1.0) args.push('--cfg-interval-end', String(params.cfgIntervalEnd));
-
-    const result = await runPythonGeneration(args);
-
-    if (!result.success) {
-      throw new Error(result.error || 'Generation failed');
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API error: ${response.status} - ${errorText}`);
     }
 
-    if (!result.audio_paths || result.audio_paths.length === 0) {
-      throw new Error('No audio files generated');
+    const result = await response.json();
+    if (result.code !== 200) {
+      throw new Error(result.error || 'Format failed');
     }
 
-    const audioUrls: string[] = [];
-    let actualDuration = 0;
-    for (const srcPath of result.audio_paths) {
-      const ext = srcPath.includes('.flac') ? '.flac' : '.mp3';
-      const filename = `${jobId}_${audioUrls.length}${ext}`;
-      const destPath = path.join(AUDIO_DIR, filename);
-
-      await mkdir(AUDIO_DIR, { recursive: true });
-      await copyFile(srcPath, destPath);
-
-      if (audioUrls.length === 0) {
-        actualDuration = getAudioDuration(destPath);
-      }
-
-      audioUrls.push(`/audio/${filename}`);
-    }
-
-    try {
-      await rm(jobOutputDir, { recursive: true, force: true });
-    } catch (cleanupError) {
-      console.warn(`Job ${jobId}: Failed to cleanup output dir`, cleanupError);
-    }
-
-    const finalDuration = actualDuration > 0 ? actualDuration : (params.duration && params.duration > 0 ? params.duration : 60);
-
-    job.status = 'succeeded';
-    job.result = {
-      audioUrls,
-      duration: finalDuration,
-      bpm: params.bpm,
-      keyScale: params.keyScale,
-      timeSignature: params.timeSignature,
-      status: 'succeeded',
-    };
-    job.rawResponse = result;
-    console.log(`Job ${jobId}: Completed in ${result.elapsed_seconds?.toFixed(1)}s with ${audioUrls.length} audio files`);
-
+    return result.data;
   } catch (error) {
-    console.error(`Job ${jobId}: Generation failed`, error);
-    job.status = 'failed';
-    job.error = error instanceof Error ? error.message : 'Generation failed';
-
-    try {
-      const jobOutputDir = path.join(ACESTEP_DIR, 'output', jobId);
-      await rm(jobOutputDir, { recursive: true, force: true });
-    } catch { /* ignore cleanup errors */ }
+    console.error('[ACE-Step] Format API error:', error);
+    throw error;
   }
 }
 
-interface PythonResult {
-  success: boolean;
-  audio_paths?: string[];
-  elapsed_seconds?: number;
-  error?: string;
-}
 
-function runPythonGeneration(scriptArgs: string[]): Promise<PythonResult> {
-  return new Promise((resolve) => {
-    const pythonPath = resolvePythonPath(ACESTEP_DIR);
-    const args = [PYTHON_SCRIPT, ...scriptArgs];
 
-    const proc = spawn(pythonPath, args, {
-      cwd: ACESTEP_DIR,
-      env: {
-        ...process.env,
-        CUDA_VISIBLE_DEVICES: '0',
-        ACESTEP_PATH: ACESTEP_DIR,
-      },
-    });
 
-    let stdout = '';
-    let stderr = '';
-
-    proc.stdout.on('data', (data) => {
-      stdout += data.toString();
-    });
-
-    proc.stderr.on('data', (data) => {
-      stderr += data.toString();
-      // Log progress to console
-      const lines = data.toString().split('\n');
-      for (const line of lines) {
-        if (line.trim()) {
-          console.log(`[ACE-Step] ${line}`);
-        }
-      }
-    });
-
-    proc.on('close', (code) => {
-      if (code !== 0) {
-        resolve({ success: false, error: stderr || `Process exited with code ${code}` });
-        return;
-      }
-
-      // Find the JSON output (last line that starts with {)
-      const lines = stdout.split('\n').filter(l => l.trim());
-      const jsonLine = lines.find(l => l.startsWith('{'));
-
-      if (!jsonLine) {
-        resolve({ success: false, error: 'No JSON output from generation script' });
-        return;
-      }
-
-      try {
-        const result = JSON.parse(jsonLine);
-        resolve(result);
-      } catch {
-        resolve({ success: false, error: 'Invalid JSON from generation script' });
-      }
-    });
-
-    proc.on('error', (err) => {
-      resolve({ success: false, error: err.message });
-    });
-  });
-}
 
 function extractAudioFiles(result: unknown): string[] {
   const urls: string[] = [];

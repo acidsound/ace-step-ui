@@ -14,7 +14,7 @@ import {
   cleanupJob,
   getJobRawResponse,
   downloadAudioToBuffer,
-  resolvePythonPath,
+  formatInputViaApi,
 } from '../services/acestep.js';
 import { getStorageProvider } from '../services/storage/factory.js';
 
@@ -372,11 +372,19 @@ router.get('/status/:jobId', authMiddleware, async (req: AuthenticatedRequest, r
                 const storageKey = `${req.user!.id}/${songId}${ext}`;
                 const storedPath = await storage.upload(storageKey, buffer, `audio/${ext.slice(1)}`);
 
+                console.log('[Generate] Inserting song with timestamps:', {
+                  hasSentenceTimestamps: !!aceStatus.result.sentence_timestamps,
+                  sentenceTimestampType: typeof aceStatus.result.sentence_timestamps,
+                  sentenceTimestampLength: Array.isArray(aceStatus.result.sentence_timestamps) ? aceStatus.result.sentence_timestamps.length : 'N/A',
+                  preview: Array.isArray(aceStatus.result.sentence_timestamps) ? JSON.stringify(aceStatus.result.sentence_timestamps).slice(0, 100) : 'N/A'
+                });
+
                 await pool.query(
                   `INSERT INTO songs (id, user_id, title, lyrics, style, caption, audio_url,
-                                      duration, bpm, key_scale, time_signature, tags, is_public, generation_params,
+                                      duration, bpm, key_scale, time_signature, lrc, lm_score, dit_score,
+                                      sentence_timestamps, token_timestamps, tags, is_public, generation_params,
                                       created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, datetime('now'), datetime('now'))`,
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, datetime('now'), datetime('now'))`,
                   [
                     songId,
                     req.user!.id,
@@ -389,6 +397,11 @@ router.get('/status/:jobId', authMiddleware, async (req: AuthenticatedRequest, r
                     aceStatus.result.bpm || params.bpm,
                     aceStatus.result.keyScale || params.keyScale,
                     aceStatus.result.timeSignature || params.timeSignature,
+                    aceStatus.result.lrc,
+                    aceStatus.result.lm_score,
+                    aceStatus.result.dit_score,
+                    aceStatus.result.sentence_timestamps ? JSON.stringify(aceStatus.result.sentence_timestamps) : null,
+                    aceStatus.result.token_timestamps ? JSON.stringify(aceStatus.result.token_timestamps) : null,
                     JSON.stringify([]),
                     JSON.stringify(params),
                   ]
@@ -400,9 +413,10 @@ router.get('/status/:jobId', authMiddleware, async (req: AuthenticatedRequest, r
                 // Still create song record with remote URL
                 await pool.query(
                   `INSERT INTO songs (id, user_id, title, lyrics, style, caption, audio_url,
-                                      duration, bpm, key_scale, time_signature, tags, is_public, generation_params,
+                                      duration, bpm, key_scale, time_signature, lrc, lm_score, dit_score,
+                                      sentence_timestamps, token_timestamps, tags, is_public, generation_params,
                                       created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, datetime('now'), datetime('now'))`,
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, datetime('now'), datetime('now'))`,
                   [
                     songId,
                     req.user!.id,
@@ -415,6 +429,11 @@ router.get('/status/:jobId', authMiddleware, async (req: AuthenticatedRequest, r
                     aceStatus.result.bpm || params.bpm,
                     aceStatus.result.keyScale || params.keyScale,
                     aceStatus.result.timeSignature || params.timeSignature,
+                    aceStatus.result.lrc,
+                    aceStatus.result.lm_score,
+                    aceStatus.result.dit_score,
+                    aceStatus.result.sentence_timestamps ? JSON.stringify(aceStatus.result.sentence_timestamps) : null,
+                    aceStatus.result.token_timestamps ? JSON.stringify(aceStatus.result.token_timestamps) : null,
                     JSON.stringify([]),
                     JSON.stringify(params),
                   ]
@@ -564,69 +583,21 @@ router.post('/format', authMiddleware, async (req: AuthenticatedRequest, res: Re
       return;
     }
 
-    const { spawn } = await import('child_process');
+    /* Local script execution removed in favor of remote API call */
 
-    const ACESTEP_DIR = process.env.ACESTEP_PATH || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../ACE-Step-1.5');
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
-    const SCRIPTS_DIR = path.join(__dirname, '../../scripts');
-    const FORMAT_SCRIPT = path.join(SCRIPTS_DIR, 'format_sample.py');
-    const pythonPath = resolvePythonPath(ACESTEP_DIR);
-
-    const args = [
-      FORMAT_SCRIPT,
-      '--caption', caption,
-      '--json',
-    ];
-
-    if (lyrics) args.push('--lyrics', lyrics);
-    if (bpm && bpm > 0) args.push('--bpm', String(bpm));
-    if (duration && duration > 0) args.push('--duration', String(duration));
-    if (keyScale) args.push('--key-scale', keyScale);
-    if (timeSignature) args.push('--time-signature', timeSignature);
-    if (temperature !== undefined) args.push('--temperature', String(temperature));
-    if (topK && topK > 0) args.push('--top-k', String(topK));
-    if (topP !== undefined) args.push('--top-p', String(topP));
-
-    const result = await new Promise<{ success: boolean; data?: any; error?: string }>((resolve) => {
-      const proc = spawn(pythonPath, args, {
-        cwd: ACESTEP_DIR,
-        env: {
-          ...process.env,
-          CUDA_VISIBLE_DEVICES: '0',
-          ACESTEP_PATH: ACESTEP_DIR,
-        },
-      });
-
-      let stdout = '';
-      let stderr = '';
-
-      proc.stdout.on('data', (data) => { stdout += data.toString(); });
-      proc.stderr.on('data', (data) => { stderr += data.toString(); });
-
-      proc.on('close', (code) => {
-        if (code === 0 && stdout) {
-          try {
-            const parsed = JSON.parse(stdout);
-            resolve({ success: true, data: parsed });
-          } catch {
-            resolve({ success: false, error: 'Failed to parse format result' });
-          }
-        } else {
-          resolve({ success: false, error: stderr || 'Format failed' });
-        }
-      });
-
-      proc.on('error', (err) => {
-        resolve({ success: false, error: err.message });
-      });
+    const resultData = await formatInputViaApi({
+      caption,
+      lyrics,
+      bpm,
+      duration,
+      keyScale,
+      timeSignature,
+      temperature
     });
 
-    if (result.success && result.data) {
-      res.json(result.data);
-    } else {
-      res.status(500).json({ success: false, error: result.error });
-    }
+    res.json({ success: true, ...resultData });
+
+    /* Original local execution code removed */
   } catch (error) {
     console.error('Format error:', error);
     res.status(500).json({ error: (error as Error).message });

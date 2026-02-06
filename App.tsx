@@ -95,7 +95,7 @@ export default function App() {
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const pendingSeekRef = useRef<number | null>(null);
-  const playNextRef = useRef<() => void>(() => {});
+  const playNextRef = useRef<() => void>(() => { });
 
   // Mobile Details Modal State
   const [showMobileDetails, setShowMobileDetails] = useState(false);
@@ -281,6 +281,11 @@ export default function App() {
           viewCount: s.view_count || 0,
           userId: s.user_id,
           creator: s.creator,
+          lrc: s.lrc,
+          lm_score: s.lm_score,
+          dit_score: s.dit_score,
+          sentence_timestamps: typeof s.sentence_timestamps === 'string' ? JSON.parse(s.sentence_timestamps) : s.sentence_timestamps,
+          token_timestamps: typeof s.token_timestamps === 'string' ? JSON.parse(s.token_timestamps) : s.token_timestamps,
         });
 
         const mySongs = mySongsRes.songs.map(mapSong);
@@ -519,18 +524,24 @@ export default function App() {
         likeCount: s.like_count || 0,
         viewCount: s.view_count || 0,
         userId: s.user_id,
-        creator: s.creator,
+        creator: s.creator || 'Anonymous',
+        lrc: s.lrc,
+        lm_score: s.lm_score,
+        dit_score: s.dit_score,
+        sentence_timestamps: typeof s.sentence_timestamps === 'string' ? JSON.parse(s.sentence_timestamps) : s.sentence_timestamps,
+        token_timestamps: typeof s.token_timestamps === 'string' ? JSON.parse(s.token_timestamps) : s.token_timestamps,
+        creator_avatar: s.creator_avatar,
       }));
-
+      console.log("loadedSongs", loadedSongs);
       // Preserve any generating songs that aren't in the loaded list
       setSongs(prev => {
-        const generatingSongs = prev.filter(s => s.isGenerating);
-        const mergedSongs = [...generatingSongs];
-        for (const song of loadedSongs) {
-          if (!mergedSongs.some(s => s.id === song.id)) {
-            mergedSongs.push(song);
-          }
-        }
+        // Keep only generating songs that ARE NOT yet in loadedSongs
+        const stillGenerating = prev.filter(p =>
+          p.isGenerating && !loadedSongs.some(l => l.id === p.id)
+        );
+
+        const mergedSongs = [...stillGenerating, ...loadedSongs];
+
         // Sort by creation date, newest first
         return mergedSongs.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
       });
@@ -691,8 +702,8 @@ export default function App() {
     const nextQueue = list && list.length > 0
       ? list
       : (playQueue.length > 0 && playQueue.some(s => s.id === song.id))
-          ? playQueue
-          : (songs.some(s => s.id === song.id) ? songs : [song]);
+        ? playQueue
+        : (songs.some(s => s.id === song.id) ? songs : [song]);
     const nextIndex = nextQueue.findIndex(s => s.id === song.id);
     setPlayQueue(nextQueue);
     setQueueIndex(nextIndex);
@@ -872,6 +883,16 @@ export default function App() {
     setSongForVideo(song);
     setIsVideoModalOpen(true);
   };
+
+  // Sync songForVideo with latest songs list (to get timestamps when generation finishes)
+  useEffect(() => {
+    if (isVideoModalOpen && songForVideo) {
+      const freshSong = songs.find(s => s.id === songForVideo.id);
+      if (freshSong && freshSong !== songForVideo) {
+        setSongForVideo(freshSong);
+      }
+    }
+  }, [songs, isVideoModalOpen, songForVideo]);
 
   // Handle username setup
   const handleUsernameSubmit = async (username: string) => {

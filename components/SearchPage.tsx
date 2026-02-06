@@ -74,6 +74,8 @@ export const SearchPage: React.FC<SearchPageProps> = ({
     viewCount: s.view_count || s.viewCount || 0,
     creator: s.creator,
     creator_avatar: s.creator_avatar || s.creatorAvatar || null,
+    sentence_timestamps: typeof s.sentence_timestamps === 'string' ? JSON.parse(s.sentence_timestamps) : s.sentence_timestamps,
+    token_timestamps: typeof s.token_timestamps === 'string' ? JSON.parse(s.token_timestamps) : s.token_timestamps,
   });
 
   // Shuffle array randomly
@@ -109,7 +111,6 @@ export const SearchPage: React.FC<SearchPageProps> = ({
             uniqueCreators.set(song.creator, {
               id: song.user_id || song.userId || song.creator,
               username: song.creator,
-              email: '',
               created_at: song.created_at || song.createdAt,
               avatar_url: song.creator_avatar || song.creatorAvatar || null,
             });
@@ -411,11 +412,10 @@ export const SearchPage: React.FC<SearchPageProps> = ({
               <button
                 key={genre}
                 onClick={() => handleGenreClick(genre)}
-                className={`px-3 py-1.5 border rounded-full text-sm transition-all duration-200 group flex items-center gap-1.5 ${
-                  searchQuery === genre
-                    ? 'bg-pink-500 border-pink-500 text-white'
-                    : 'bg-zinc-100 dark:bg-zinc-800/60 border-zinc-200 dark:border-white/5 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700/60 hover:border-pink-500/30 hover:text-pink-600 dark:hover:text-pink-400'
-                }`}
+                className={`px-3 py-1.5 border rounded-full text-sm transition-all duration-200 group flex items-center gap-1.5 ${searchQuery === genre
+                  ? 'bg-pink-500 border-pink-500 text-white'
+                  : 'bg-zinc-100 dark:bg-zinc-800/60 border-zinc-200 dark:border-white/5 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700/60 hover:border-pink-500/30 hover:text-pink-600 dark:hover:text-pink-400'
+                  }`}
               >
                 {genre}
                 <Copy

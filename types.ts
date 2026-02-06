@@ -16,6 +16,11 @@ export interface Song {
   userId?: string;
   creator?: string;
   creator_avatar?: string;
+  lrc?: string;
+  lm_score?: number;
+  dit_score?: number;
+  sentence_timestamps?: any[];
+  token_timestamps?: any[];
 }
 
 export interface Playlist {

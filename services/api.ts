@@ -106,6 +106,12 @@ export interface Song {
   user_id?: string;
   created_at: string;
   creator?: string;
+  creator_avatar?: string;
+  lrc?: string;
+  lm_score?: number;
+  dit_score?: number;
+  sentence_timestamps?: any[];
+  token_timestamps?: any[];
 }
 
 // Transform songs to have proper audio URLs

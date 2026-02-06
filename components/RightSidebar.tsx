@@ -32,6 +32,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ song, onClose, onOpe
     const [shareModalOpen, setShareModalOpen] = useState(false);
     const [copiedStyle, setCopiedStyle] = useState(false);
     const [copiedLyrics, setCopiedLyrics] = useState(false);
+    const [copiedLrc, setCopiedLrc] = useState(false);
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [titleDraft, setTitleDraft] = useState('');
     const [titleError, setTitleError] = useState<string | null>(null);
@@ -417,6 +418,71 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ song, onClose, onOpe
                             </div>
                         </div>
                     </div>
+
+                    {/* LRC & Scores */}
+                    {(song.lrc || song.lm_score != null || song.dit_score != null) && (
+                        <div className="space-y-4">
+                            {/* Scores */}
+                            {(song.lm_score != null || song.dit_score != null) && (
+                                <div className="flex gap-4">
+                                    {song.lm_score != null && (
+                                        <div className="flex-1 bg-white dark:bg-black/20 border border-zinc-200 dark:border-white/5 rounded-xl p-4">
+                                            <div className="text-xs text-zinc-500 mb-1">LM Score</div>
+                                            <div className="text-xl font-bold text-zinc-900 dark:text-white">
+                                                {(song.lm_score * 100).toFixed(1)}%
+                                            </div>
+                                            <div className="mt-2 w-full bg-zinc-200 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden">
+                                                <div
+                                                    className="h-full bg-indigo-500"
+                                                    style={{ width: `${song.lm_score * 100}%` }}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                    {song.dit_score != null && (
+                                        <div className="flex-1 bg-white dark:bg-black/20 border border-zinc-200 dark:border-white/5 rounded-xl p-4">
+                                            <div className="text-xs text-zinc-500 mb-1">DiT Score</div>
+                                            <div className="text-xl font-bold text-zinc-900 dark:text-white">
+                                                {(song.dit_score * 100).toFixed(1)}%
+                                            </div>
+                                            <div className="mt-2 w-full bg-zinc-200 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden">
+                                                <div
+                                                    className="h-full bg-purple-500"
+                                                    style={{ width: `${song.dit_score * 100}%` }}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* LRC */}
+                            {song.lrc && song.lrc.length > 0 && (
+                                <div className="bg-white dark:bg-black/20 border border-zinc-200 dark:border-white/5 rounded-xl overflow-hidden">
+                                    <div className="px-4 py-3 border-b border-zinc-100 dark:border-white/5 flex items-center justify-between bg-zinc-50 dark:bg-white/5">
+                                        <h3 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Sync Lyrics (LRC)</h3>
+                                        <button
+                                            onClick={() => {
+                                                if (song.lrc) {
+                                                    navigator.clipboard.writeText(song.lrc);
+                                                    setCopiedLrc(true);
+                                                    setTimeout(() => setCopiedLrc(false), 2000);
+                                                }
+                                            }}
+                                            className={`flex items-center gap-1 text-[10px] font-medium transition-colors ${copiedLrc ? 'text-green-500' : 'text-zinc-500 hover:text-black dark:hover:text-white'}`}
+                                        >
+                                            <Copy size={12} /> {copiedLrc ? 'Copied!' : 'Copy'}
+                                        </button>
+                                    </div>
+                                    <div className="p-4 max-h-[200px] overflow-y-auto custom-scrollbar">
+                                        <div className="text-xs font-mono text-zinc-500 dark:text-zinc-400 whitespace-pre-line leading-relaxed">
+                                            {song.lrc}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                 </div>
             </div>

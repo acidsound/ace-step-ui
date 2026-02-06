@@ -34,10 +34,18 @@ CREATE TABLE IF NOT EXISTS songs (
   view_count INTEGER DEFAULT 0,
   has_video INTEGER DEFAULT 0,
   video_url TEXT,
+  lrc TEXT,
+  lm_score REAL,
+  dit_score REAL,
+  sentence_timestamps TEXT,
+  token_timestamps TEXT,
   generation_params TEXT,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
+
+-- Add Score and LRC columns to existing songs table if they don't exist
+-- We use separate try-catch blocks in JS for these since SQLite doesn't support IF NOT EXISTS for ADD COLUMN
 
 -- Generation jobs table (simplified - no credit_reserved)
 CREATE TABLE IF NOT EXISTS generation_jobs (
@@ -147,6 +155,30 @@ function migrate(): void {
   try {
     // Execute the entire migration script at once
     db.exec(migrations);
+    console.log('Core tables updated successfully!');
+
+    // Add columns to existing songs table if missing
+    const alterStatements = [
+      "ALTER TABLE songs ADD COLUMN lrc TEXT",
+      "ALTER TABLE songs ADD COLUMN lm_score REAL",
+      "ALTER TABLE songs ADD COLUMN dit_score REAL",
+      "ALTER TABLE songs ADD COLUMN sentence_timestamps TEXT",
+      "ALTER TABLE songs ADD COLUMN token_timestamps TEXT"
+    ];
+
+    for (const stmt of alterStatements) {
+      try {
+        db.exec(stmt);
+        console.log(`Migration passed: ${stmt}`);
+      } catch (e) {
+        if (String(e).includes('duplicate column name')) {
+          // Ignore, column already exists
+        } else {
+          console.warn(`Migration warning for "${stmt}":`, e);
+        }
+      }
+    }
+
     console.log('Migrations completed successfully!');
   } catch (error) {
     // Check if it's just "already exists" errors
