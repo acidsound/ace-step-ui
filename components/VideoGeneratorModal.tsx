@@ -227,33 +227,83 @@ export const VideoGeneratorModal: React.FC<VideoGeneratorModalProps> = ({ isOpen
     }
   }, [song]);
 
-  // Parse sentence timestamps
+  // Parse lyrics from sentence_timestamps or LRC
   useEffect(() => {
+    if (!song) return;
 
-    if (song?.sentence_timestamps) {
+    let segments: LyricSegment[] = [];
+
+    // Priority 1: Sentence Timestamps (JSON)
+    if (song.sentence_timestamps) {
       try {
         let parsed = song.sentence_timestamps;
         if (typeof parsed === 'string') {
           parsed = JSON.parse(parsed);
         }
 
-        if (Array.isArray(parsed)) {
-          const segments = parsed.map((p: any) => ({
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          segments = parsed.map((p: any) => ({
             start: Number(p.start || 0),
             end: Number(p.end || 0),
             text: String(p.text || '').trim()
           })).filter(s => s.text);
-
-          setLyricSegments(segments);
-
-          // Auto-enable if we have segments and no custom text layers were added yet (beyond default)
-          if (segments.length > 0) {
-            setKaraokeMode(true);
-          }
         }
       } catch (e) {
         console.error('Failed to parse lyrics timestamps:', e);
       }
+    }
+
+    // Priority 2: LRC Content
+    if (segments.length === 0 && song.lrc) {
+      try {
+        const lines = song.lrc.split('\n');
+        const lrcSegments: LyricSegment[] = [];
+
+        const timeRegex = /\[(\d{2}):(\d{2})(?:\.(\d{2,3}))?\]/;
+
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          const match = timeRegex.exec(line);
+
+          if (match) {
+            const minutes = parseInt(match[1], 10);
+            const seconds = parseInt(match[2], 10);
+            const ms = match[3] ? parseInt(match[3].padEnd(3, '0').slice(0, 3), 10) : 0;
+            const startTime = minutes * 60 + seconds + ms / 1000;
+            const text = line.replace(timeRegex, '').trim();
+
+            if (text) {
+              lrcSegments.push({
+                start: startTime,
+                end: 0, // Will be calculated below
+                text
+              });
+            }
+          }
+        }
+
+        // Calculate end times based on next segment
+        for (let i = 0; i < lrcSegments.length; i++) {
+          if (i < lrcSegments.length - 1) {
+            lrcSegments[i].end = lrcSegments[i + 1].start;
+          } else {
+            // For last segment, add 5 seconds or clamp to reasonable duration
+            lrcSegments[i].end = lrcSegments[i].start + 5;
+          }
+        }
+
+        if (lrcSegments.length > 0) {
+          segments = lrcSegments;
+        }
+      } catch (e) {
+        console.error('Failed to parse LRC:', e);
+      }
+    }
+
+    if (segments.length > 0) {
+      setLyricSegments(segments);
+      // Auto-enable karaoke if we have segments and no user interaction yet (simplified logic)
+      setKaraokeMode(true);
     }
   }, [song]);
 
