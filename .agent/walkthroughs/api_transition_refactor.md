@@ -66,7 +66,7 @@ The goal was to decouple the UI server from the backend implementation by utiliz
     *   Enhanced the lyrics parsing logic (`useEffect`).
     *   **Fallback Logic:** Now checks `song.sentence_timestamps` first (JSON format). If unavailable, falls back to parsing `song.lrc` (Text format).
     *   Implemented a local LRC parser to convert `[mm:ss.xx]` tags into `LyricSegment` objects used by the visualizer.
-    *   This ensures that songs generated via the new API (which returns LRC) will automatically display karaoke lyrics in video exports.
+    *   This ensures that songs generated via the new API (which returns LRC) will automatically display noraebang lyrics in video exports.
 
 ## Result
 

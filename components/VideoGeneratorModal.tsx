@@ -72,7 +72,7 @@ interface LyricSegment {
   text: string;
 }
 
-interface KaraokeConfig {
+interface NoraebangConfig {
   fontSize: number;
   yPos: number; // 0-100 percentage
   primaryColor: string;
@@ -207,10 +207,10 @@ export const VideoGeneratorModal: React.FC<VideoGeneratorModalProps> = ({ isOpen
   // Text Layers State
   const [textLayers, setTextLayers] = useState<TextLayer[]>([]);
 
-  // Karaoke State
-  const [karaokeMode, setKaraokeMode] = useState(false);
+  // Noraebang State
+  const [noraebangMode, setNoraebangMode] = useState(false);
   const [lyricSegments, setLyricSegments] = useState<LyricSegment[]>([]);
-  const [karaokeConfig, setKaraokeConfig] = useState<KaraokeConfig>({
+  const [noraebangConfig, setNoraebangConfig] = useState<NoraebangConfig>({
     fontSize: 48,
     yPos: 85,
     primaryColor: '#ffffff',
@@ -220,12 +220,17 @@ export const VideoGeneratorModal: React.FC<VideoGeneratorModalProps> = ({ isOpen
   // Init default text on load
   useEffect(() => {
     if (song) {
+      // Default Y position for Layer 1 is now always 25%
       setTextLayers([
-        { id: '1', text: song.title, x: 50, y: 85, size: 52, color: '#ffffff', font: 'Inter' },
+        { id: '1', text: song.title, x: 50, y: 25, size: 52, color: '#ffffff', font: 'Inter' },
         { id: '2', text: song.style.toUpperCase(), x: 50, y: 92, size: 24, color: '#3b82f6', font: 'Inter' }
       ]);
     }
   }, [song]);
+
+  // Adjust Layer 1 default position when Noraebang mode is toggled is no longer needed 
+  // since Layer 1 is 25% by default as requested.
+
 
   // Parse lyrics from sentence_timestamps or LRC
   useEffect(() => {
@@ -302,8 +307,8 @@ export const VideoGeneratorModal: React.FC<VideoGeneratorModalProps> = ({ isOpen
 
     if (segments.length > 0) {
       setLyricSegments(segments);
-      // Auto-enable karaoke if we have segments and no user interaction yet (simplified logic)
-      setKaraokeMode(true);
+      // Auto-enable Noraebang if we have segments and no user interaction yet (simplified logic)
+      setNoraebangMode(true);
     }
   }, [song]);
 
@@ -312,17 +317,17 @@ export const VideoGeneratorModal: React.FC<VideoGeneratorModalProps> = ({ isOpen
   const effectsRef = useRef(effects);
   const intensitiesRef = useRef(intensities);
   const textLayersRef = useRef(textLayers);
-  const karaokeModeRef = useRef(karaokeMode);
+  const noraebangModeRef = useRef(noraebangMode);
   const lyricSegmentsRef = useRef(lyricSegments);
-  const karaokeConfigRef = useRef(karaokeConfig);
+  const noraebangConfigRef = useRef(noraebangConfig);
 
   useEffect(() => { configRef.current = config; }, [config]);
   useEffect(() => { effectsRef.current = effects; }, [effects]);
   useEffect(() => { intensitiesRef.current = intensities; }, [intensities]);
   useEffect(() => { textLayersRef.current = textLayers; }, [textLayers]);
-  useEffect(() => { karaokeModeRef.current = karaokeMode; }, [karaokeMode]);
+  useEffect(() => { noraebangModeRef.current = noraebangMode; }, [noraebangMode]);
   useEffect(() => { lyricSegmentsRef.current = lyricSegments; }, [lyricSegments]);
-  useEffect(() => { karaokeConfigRef.current = karaokeConfig; }, [karaokeConfig]);
+  useEffect(() => { noraebangConfigRef.current = noraebangConfig; }, [noraebangConfig]);
 
   const exportStageRef = useRef(exportStage);
   useEffect(() => { exportStageRef.current = exportStage; }, [exportStage]);
@@ -687,9 +692,9 @@ export const VideoGeneratorModal: React.FC<VideoGeneratorModalProps> = ({ isOpen
     const currentEffects = effectsRef.current;
     const currentIntensities = intensitiesRef.current;
     const currentTexts = textLayersRef.current;
-    const currentKaraokeMode = karaokeModeRef.current;
+    const currentNoraebangMode = noraebangModeRef.current;
     const currentLyricSegments = lyricSegmentsRef.current;
-    const currentKaraokeConfig = karaokeConfigRef.current;
+    const currentNoraebangConfig = noraebangConfigRef.current;
 
     for (let frameIndex = 0; frameIndex < totalFrames; frameIndex++) {
       const time = frameIndex / fps;
@@ -829,23 +834,18 @@ export const VideoGeneratorModal: React.FC<VideoGeneratorModalProps> = ({ isOpen
         ctx.imageSmoothingEnabled = true;
       }
 
-      // 3. TEXT LAYERS & KARAOKE
+      // 3. TEXT LAYERS & NORAEBANG
       ctx.shadowBlur = 10;
       ctx.shadowColor = 'black';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
-      // Draw standard layers (Persistent even in Karaoke)
+      // Draw standard layers (Persistent even in Noraebang)
       currentTexts.forEach(layer => {
         ctx.fillStyle = layer.color;
 
         let xPos = (layer.x / 100) * width;
         let yPos = (layer.y / 100) * height;
-
-        // Special handling for Layer 1 (Title) in Karaoke Mode
-        if (currentKaraokeMode && currentLyricSegments.length > 0 && layer.id === '1') {
-          yPos = height * 0.25; // Move to top 25% to make room for lyrics
-        }
 
         const dynamicSize = layer.id === '1' && currentConfig.preset === 'Minimal' ? layer.size * pulse : layer.size;
         ctx.font = `bold ${dynamicSize}px ${layer.font}, sans-serif`;
@@ -857,25 +857,25 @@ export const VideoGeneratorModal: React.FC<VideoGeneratorModalProps> = ({ isOpen
         ctx.fillText(layer.text, xPos, yPos);
       });
 
-      // Draw Karaoke Lyrics (Overlay)
-      if (currentKaraokeMode && currentLyricSegments.length > 0) {
+      // Draw Noraebang Lyrics (Overlay)
+      if (currentNoraebangMode && currentLyricSegments.length > 0) {
         const activeSegment = currentLyricSegments.find(s => time >= s.start && time <= s.end);
 
         if (activeSegment) {
-          ctx.fillStyle = currentKaraokeConfig.primaryColor;
+          ctx.fillStyle = currentNoraebangConfig.primaryColor;
           ctx.strokeStyle = 'black';
           ctx.lineWidth = 6;
 
-          const fontSize = currentKaraokeConfig.fontSize + (pulse - 1) * 15;
+          const fontSize = currentNoraebangConfig.fontSize + (pulse - 1) * 15;
           ctx.font = `bold ${fontSize}px Inter, sans-serif`;
 
           const xPos = width / 2;
-          const yPos = (currentKaraokeConfig.yPos / 100) * height;
+          const yPos = (currentNoraebangConfig.yPos / 100) * height;
 
           ctx.strokeText(activeSegment.text, xPos, yPos);
           ctx.fillText(activeSegment.text, xPos, yPos);
 
-          ctx.shadowColor = currentKaraokeConfig.glowColor;
+          ctx.shadowColor = currentNoraebangConfig.glowColor;
           ctx.shadowBlur = 20 * pulse;
           ctx.fillText(activeSegment.text, xPos, yPos);
         }
@@ -1338,9 +1338,9 @@ export const VideoGeneratorModal: React.FC<VideoGeneratorModalProps> = ({ isOpen
       ctx.imageSmoothingEnabled = true;
     }
 
-    const currentKaraokeMode = karaokeModeRef.current;
+    const currentNoraebangMode = noraebangModeRef.current;
     const currentLyricSegments = lyricSegmentsRef.current;
-    const currentKaraokeConfig = karaokeConfigRef.current;
+    const currentNoraebangConfig = noraebangConfigRef.current;
 
     // --- 3. CUSTOM TEXT LAYERS ---
     ctx.shadowBlur = 10;
@@ -1348,17 +1348,12 @@ export const VideoGeneratorModal: React.FC<VideoGeneratorModalProps> = ({ isOpen
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // Draw Standard Layers (Persistent even in Karaoke)
+    // Draw Standard Layers (Persistent even in Noraebang)
     currentTexts.forEach(layer => {
       ctx.fillStyle = layer.color;
 
       let xPos = (layer.x / 100) * width;
       let yPos = (layer.y / 100) * height;
-
-      // Special handling for Layer 1 (Title) in Karaoke Mode
-      if (currentKaraokeMode && currentLyricSegments.length > 0 && layer.id === '1') {
-        yPos = height * 0.25; // Move to top 25% to make room for lyrics
-      }
 
       // Dynamic size pulsing
       const dynamicSize = layer.id === '1' && currentConfig.preset === 'Minimal' ? layer.size * pulse : layer.size;
@@ -1371,29 +1366,29 @@ export const VideoGeneratorModal: React.FC<VideoGeneratorModalProps> = ({ isOpen
       ctx.fillText(layer.text, xPos, yPos);
     });
 
-    // Draw Karaoke Lyrics (Overlay)
-    if (currentKaraokeMode && currentLyricSegments.length > 0) {
+    // Draw Noraebang Lyrics (Overlay)
+    if (currentNoraebangMode && currentLyricSegments.length > 0) {
       const searchTime = time;
       const activeSegment = currentLyricSegments.find(s => searchTime >= s.start && searchTime <= s.end);
 
       if (activeSegment) {
-        ctx.fillStyle = currentKaraokeConfig.primaryColor;
+        ctx.fillStyle = currentNoraebangConfig.primaryColor;
         ctx.strokeStyle = 'black';
         ctx.lineWidth = 6;
 
         // Dynamic size based on pulse and user config
-        const fontSize = currentKaraokeConfig.fontSize + (pulse - 1) * 15;
+        const fontSize = currentNoraebangConfig.fontSize + (pulse - 1) * 15;
         ctx.font = `bold ${fontSize}px Inter, sans-serif`;
 
         const xPos = width / 2;
-        const yPos = (currentKaraokeConfig.yPos / 100) * height;
+        const yPos = (currentNoraebangConfig.yPos / 100) * height;
 
         // Stroke first for readability
         ctx.strokeText(activeSegment.text, xPos, yPos);
         ctx.fillText(activeSegment.text, xPos, yPos);
 
         // Active Glow
-        ctx.shadowColor = currentKaraokeConfig.glowColor;
+        ctx.shadowColor = currentNoraebangConfig.glowColor;
         ctx.shadowBlur = 20 * pulse;
         ctx.fillText(activeSegment.text, xPos, yPos);
       }
@@ -2271,19 +2266,19 @@ export const VideoGeneratorModal: React.FC<VideoGeneratorModalProps> = ({ isOpen
             {activeTab === 'text' && (
               <div className="space-y-6">
 
-                {/* Karaoke Toggle - Always visible for feature discovery */}
+                {/* Noraebang Toggle - Always visible for feature discovery */}
                 <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-xl p-4 mb-6">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <Music className="w-4 h-4 text-purple-500" />
-                      <label className="text-sm font-bold text-white">Karaoke Mode</label>
+                      <label className="text-sm font-bold text-white">Noraebang Mode</label>
                     </div>
                     {lyricSegments.length > 0 ? (
                       <button
-                        onClick={() => setKaraokeMode(!karaokeMode)}
-                        className={`w-12 h-6 rounded-full transition-colors relative ${karaokeMode ? 'bg-purple-500' : 'bg-zinc-700'}`}
+                        onClick={() => setNoraebangMode(!noraebangMode)}
+                        className={`w-12 h-6 rounded-full transition-colors relative ${noraebangMode ? 'bg-purple-500' : 'bg-zinc-700'}`}
                       >
-                        <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${karaokeMode ? 'left-7' : 'left-1'} `} />
+                        <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${noraebangMode ? 'left-7' : 'left-1'} `} />
                       </button>
                     ) : (
                       <span className="text-[10px] font-bold text-zinc-500 bg-zinc-800 px-2 py-1 rounded">
@@ -2293,112 +2288,117 @@ export const VideoGeneratorModal: React.FC<VideoGeneratorModalProps> = ({ isOpen
                   </div>
                   <p className="text-xs text-zinc-400">
                     {lyricSegments.length > 0
-                      ? (karaokeMode
+                      ? (noraebangMode
                         ? "Using synchronized lyrics timestamps from generation."
                         : "Using static text layers below.")
                       : "No synchronized lyrics found. Using static text layers."}
                   </p>
                 </div>
 
-                {karaokeMode ? (
-                  // Karaoke Styling Controls
-                  <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                    <div>
-                      <label className="text-xs text-zinc-400 mb-1 block">Font Size</label>
-                      <input
-                        type="range" min="20" max="100"
-                        value={karaokeConfig.fontSize}
-                        onChange={(e) => setKaraokeConfig({ ...karaokeConfig, fontSize: parseInt(e.target.value) })}
-                        className="w-full accent-purple-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-zinc-400 mb-1 block">Vertical Position ({karaokeConfig.yPos}%)</label>
-                      <input
-                        type="range" min="10" max="95"
-                        value={karaokeConfig.yPos}
-                        onChange={(e) => setKaraokeConfig({ ...karaokeConfig, yPos: parseInt(e.target.value) })}
-                        className="w-full accent-purple-500"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-xs text-zinc-400 mb-1 block">Text Color</label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="color"
-                            value={karaokeConfig.primaryColor}
-                            onChange={(e) => setKaraokeConfig({ ...karaokeConfig, primaryColor: e.target.value })}
-                            className="w-8 h-8 rounded cursor-pointer border-none p-0"
-                          />
-                          <span className="text-xs font-mono text-zinc-500">{karaokeConfig.primaryColor}</span>
-                        </div>
+                <div className="space-y-4">
+                  {noraebangMode && (
+                    // Noraebang Styling Controls
+                    <div className="bg-purple-500/5 border border-purple-500/10 rounded-xl p-4 space-y-4 animate-in fade-in slide-in-from-top-2">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Music className="w-3 h-3 text-purple-400" />
+                        <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">Lyrics Settings</span>
                       </div>
                       <div>
-                        <label className="text-xs text-zinc-400 mb-1 block">Glow Color</label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="color"
-                            value={karaokeConfig.glowColor}
-                            onChange={(e) => setKaraokeConfig({ ...karaokeConfig, glowColor: e.target.value })}
-                            className="w-8 h-8 rounded cursor-pointer border-none p-0"
-                          />
-                          <span className="text-xs font-mono text-zinc-500">{karaokeConfig.glowColor}</span>
+                        <label className="text-xs text-zinc-400 mb-1 block">Font Size</label>
+                        <input
+                          type="range" min="20" max="100"
+                          value={noraebangConfig.fontSize}
+                          onChange={(e) => setNoraebangConfig({ ...noraebangConfig, fontSize: parseInt(e.target.value) })}
+                          className="w-full accent-purple-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-zinc-400 mb-1 block">Y position ({noraebangConfig.yPos}%)</label>
+                        <input
+                          type="range" min="10" max="95"
+                          value={noraebangConfig.yPos}
+                          onChange={(e) => setNoraebangConfig({ ...noraebangConfig, yPos: parseInt(e.target.value) })}
+                          className="w-full accent-purple-500"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-xs text-zinc-400 mb-1 block">Text Color</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="color"
+                              value={noraebangConfig.primaryColor}
+                              onChange={(e) => setNoraebangConfig({ ...noraebangConfig, primaryColor: e.target.value })}
+                              className="w-8 h-8 rounded cursor-pointer border-none p-0 bg-transparent"
+                            />
+                            <span className="text-xs font-mono text-zinc-500">{noraebangConfig.primaryColor}</span>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs text-zinc-400 mb-1 block">Glow Color</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="color"
+                              value={noraebangConfig.glowColor}
+                              onChange={(e) => setNoraebangConfig({ ...noraebangConfig, glowColor: e.target.value })}
+                              className="w-8 h-8 rounded cursor-pointer border-none p-0 bg-transparent"
+                            />
+                            <span className="text-xs font-mono text-zinc-500">{noraebangConfig.glowColor}</span>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ) : (
-                  // Standard Text Controls
-                  <div className="space-y-4">
-                    <button
-                      onClick={addTextLayer}
-                      className="w-full py-2 bg-pink-600 text-white rounded-lg flex items-center justify-center gap-2 text-xs font-bold hover:bg-pink-700"
-                    >
-                      <Plus size={14} /> Add Text Layer
-                    </button>
+                  )}
 
-                    <div className="space-y-3">
-                      {textLayers.map((layer, index) => (
-                        <div key={layer.id} className="bg-black/20 p-3 rounded-lg border border-white/5 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-zinc-500">Layer {index + 1}</span>
+                  <div className="space-y-3">
+                    {textLayers.map((layer, index) => (
+                      <div key={layer.id} className="bg-black/20 p-3 rounded-lg border border-white/5 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-zinc-500">Layer {index + 1}</span>
+                          {index > 1 && (
                             <button onClick={() => removeTextLayer(layer.id)} className="text-zinc-500 hover:text-red-500">
                               <Trash2 size={14} />
                             </button>
+                          )}
+                        </div>
+                        <input
+                          type="text"
+                          value={layer.text}
+                          onChange={(e) => updateTextLayer(layer.id, { text: e.target.value })}
+                          className="w-full bg-zinc-800 rounded px-2 py-1 text-xs text-white border border-white/5"
+                          placeholder="Text content"
+                        />
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[10px] text-zinc-500 block mb-1">X Position</label>
+                            <input type="range" min="0" max="100" value={layer.x} onChange={(e) => updateTextLayer(layer.id, { x: parseInt(e.target.value) })} className="w-full accent-pink-500 h-1 bg-zinc-700 rounded-lg appearance-none" />
                           </div>
-                          <input
-                            type="text"
-                            value={layer.text}
-                            onChange={(e) => updateTextLayer(layer.id, { text: e.target.value })}
-                            className="w-full bg-zinc-800 rounded px-2 py-1 text-xs text-white border border-white/5"
-                            placeholder="Text content"
-                          />
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <label className="text-[10px] text-zinc-500 block mb-1">X Position</label>
-                              <input type="range" min="0" max="100" value={layer.x} onChange={(e) => updateTextLayer(layer.id, { x: parseInt(e.target.value) })} className="w-full accent-pink-500 h-1 bg-zinc-700 rounded-lg appearance-none" />
-                            </div>
-                            <div>
-                              <label className="text-[10px] text-zinc-500 block mb-1">Y Position</label>
-                              <input type="range" min="0" max="100" value={layer.y} onChange={(e) => updateTextLayer(layer.id, { y: parseInt(e.target.value) })} className="w-full accent-pink-500 h-1 bg-zinc-700 rounded-lg appearance-none" />
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <div className="flex-1">
-                              <label className="text-[10px] text-zinc-500 block mb-1">Size</label>
-                              <input type="number" value={layer.size} onChange={(e) => updateTextLayer(layer.id, { size: parseInt(e.target.value) })} className="w-full bg-zinc-800 rounded px-2 py-1 text-xs text-white border border-white/5" />
-                            </div>
-                            <div>
-                              <label className="text-[10px] text-zinc-500 block mb-1">Color</label>
-                              <input type="color" value={layer.color} onChange={(e) => updateTextLayer(layer.id, { color: e.target.value })} className="w-8 h-6 rounded cursor-pointer border-none bg-transparent" />
-                            </div>
+                          <div>
+                            <label className="text-[10px] text-zinc-500 block mb-1">Y Position</label>
+                            <input type="range" min="0" max="100" value={layer.y} onChange={(e) => updateTextLayer(layer.id, { y: parseInt(e.target.value) })} className="w-full accent-pink-500 h-1 bg-zinc-700 rounded-lg appearance-none" />
                           </div>
                         </div>
-                      ))}
-                    </div>
+                        <div className="flex gap-2">
+                          <div className="flex-1">
+                            <label className="text-[10px] text-zinc-500 block mb-1">Size</label>
+                            <input type="number" value={layer.size} onChange={(e) => updateTextLayer(layer.id, { size: parseInt(e.target.value) })} className="w-full bg-zinc-800 rounded px-2 py-1 text-xs text-white border border-white/5" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-zinc-500 block mb-1">Color</label>
+                            <input type="color" value={layer.color} onChange={(e) => updateTextLayer(layer.id, { color: e.target.value })} className="w-8 h-6 rounded cursor-pointer border-none bg-transparent" />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                )}
+
+                  <button
+                    onClick={addTextLayer}
+                    className="w-full py-2 bg-pink-600/20 text-pink-400 border border-pink-500/20 rounded-lg flex items-center justify-center gap-2 text-xs font-bold hover:bg-pink-600/30 transition-colors"
+                  >
+                    <Plus size={14} /> Add Text Layer
+                  </button>
+                </div>
               </div>
             )}
 
